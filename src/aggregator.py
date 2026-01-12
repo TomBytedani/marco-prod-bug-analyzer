@@ -70,6 +70,30 @@ MONTH_TO_NUM = {
 }
 
 
+def sort_year_month_columns(columns: list) -> list:
+    """Sort columns in format 'MMM-YYYY' chronologically.
+    
+    Args:
+        columns: List of column names in 'MMM-YYYY' format (e.g., ['JAN-2026', 'DEC-2025'])
+        
+    Returns:
+        List sorted chronologically (earliest date first)
+    """
+    def parse_year_month(col: str) -> tuple:
+        if not isinstance(col, str) or '-' not in col:
+            return (9999, 99)  # Unknown format goes last
+        parts = col.split('-')
+        if len(parts) == 2:
+            month_num = MONTH_TO_NUM.get(parts[0], 0)
+            try:
+                year = int(parts[1])
+            except ValueError:
+                year = 9999
+            return (year, month_num)
+        return (9999, 99)
+    
+    return sorted(columns, key=parse_year_month)
+
 def get_priority_system(systems_str: str) -> Optional[str]:
     """
     Get the highest priority system from a semicolon-separated string of systems.
@@ -414,30 +438,26 @@ class Aggregator:
         
         return pivot
     
-    def monthly_severity_counts(self, year: int = 2025) -> pd.DataFrame:
+    def monthly_severity_counts(self) -> pd.DataFrame:
         """
         Generate monthly severity counts as a simple table.
         Rows: Severity levels
-        Columns: Months (English uppercase abbreviations)
+        Columns: YearMonth in format 'MMM-YYYY' (e.g., 'JAN-2025', 'FEB-2026')
 
         BEAD 1 Filtering applied:
         - Excludes Rejected status
         - Excludes external systems (Third Party)
-
-        Args:
-            year: Filter to this year only (default: 2025)
+        
+        Multi-year support: Columns span all years present in the data,
+        sorted chronologically.
         """
-        if self.df.empty or "Month" not in self.df.columns:
+        if self.df.empty or "YearMonth" not in self.df.columns:
             return pd.DataFrame()
 
         # Apply filters: exclude Task-type issues, Rejected, and external systems
         data = self.filter_incidents_only()
         data = self.exclude_rejected(data)
         data = self.exclude_external_systems(data)
-
-        # Filter to specified year
-        if "Year" in data.columns:
-            data = data[data["Year"] == year]
         
         if data.empty:
             return pd.DataFrame()
@@ -446,14 +466,14 @@ class Aggregator:
             data,
             values="Key",
             index="Severity",
-            columns="Month",
+            columns="YearMonth",
             aggfunc="count",
             fill_value=0,
             observed=False
         )
         
-        # Reorder columns to month order
-        cols = [m for m in MONTH_ORDER if m in pivot.columns]
+        # Sort columns chronologically using year-month sorting
+        cols = sort_year_month_columns([c for c in pivot.columns])
         if not cols:
             return pivot
         
@@ -679,7 +699,7 @@ class Aggregator:
         
         return self.avg_resolution_by_severity_and_period(data, "Month")
     
-    def avg_working_hours_by_month_cross(self, severities: list[str] = None, year: int = 2025) -> pd.DataFrame:
+    def avg_working_hours_by_month_cross(self, severities: list[str] = None) -> pd.DataFrame:
         """
         Calculate average working HOURS by month with cross-month logic.
 
@@ -699,9 +719,9 @@ class Aggregator:
 
         Args:
             severities: List of severities to include (default: Blocker, Severe)
-            year: Filter to this year only (default: 2025)
 
-        Returns DataFrame with single row of average working hours by month.
+        Returns DataFrame with single row of average working hours by year-month.
+        Columns are in format 'MMM-YYYY' (e.g., 'JAN-2025', 'FEB-2026').
         """
         if severities is None:
             severities = ["Blocker", "Severe"]
@@ -727,8 +747,8 @@ class Aggregator:
         if resolved_tickets.empty:
             return pd.DataFrame()
 
-        # Build monthly contributions
-        monthly_hours: Dict[str, List[float]] = {month: [] for month in MONTH_ORDER}
+        # Build monthly contributions using year-month keys (MMM-YYYY format)
+        monthly_hours: Dict[str, List[float]] = {}
 
         for _, ticket in resolved_tickets.iterrows():
             incident_dt = ticket.get("Incident detection datetime")
@@ -751,11 +771,8 @@ class Aggregator:
             months_spanned = get_months_between(incident_dt, resolution_dt)
 
             for month_info in months_spanned:
-                # Only include contributions for the specified year
-                if month_info["year"] != year:
-                    continue
-
-                month_name = month_info["month_name"]
+                # Build year-month key in MMM-YYYY format
+                year_month_key = f"{month_info['month_name']}-{month_info['year']}"
                 end_of_month = month_info["end_of_month"]
 
                 # Calculate working hours from incident to min(end_of_month, resolution)
@@ -769,38 +786,40 @@ class Aggregator:
                     hours = calculate_working_hours_to_date(incident_dt, end_of_month)
 
                 if hours > 0:
-                    monthly_hours[month_name].append(hours)
+                    if year_month_key not in monthly_hours:
+                        monthly_hours[year_month_key] = []
+                    monthly_hours[year_month_key].append(hours)
 
         # Calculate averages
         result = {}
-        for month in MONTH_ORDER:
-            hours_list = monthly_hours.get(month, [])
+        for year_month_key, hours_list in monthly_hours.items():
             if hours_list:
-                result[month] = sum(hours_list) / len(hours_list)
+                result[year_month_key] = sum(hours_list) / len(hours_list)
 
         if not result:
             return pd.DataFrame()
 
-        # Create DataFrame with only months that have data
+        # Create DataFrame with year-month columns
         df_result = pd.DataFrame([result], index=["Avg WH"])
 
-        # Reorder columns to month order
-        cols = [m for m in MONTH_ORDER if m in df_result.columns]
+        # Sort columns chronologically using year-month sorting
+        cols = sort_year_month_columns([c for c in df_result.columns])
         return df_result[cols]
     
-    def avg_working_days_by_month_cross(self, severities: list[str] = None, year: int = 2025) -> pd.DataFrame:
+    def avg_working_days_by_month_cross(self, severities: list[str] = None) -> pd.DataFrame:
         """
         Calculate average working DAYS by month with cross-month logic.
 
         This is derived from avg_working_hours_by_month_cross() by dividing by 8.
+        
+        Columns are in format 'MMM-YYYY' (e.g., 'JAN-2025', 'FEB-2026').
 
         Args:
             severities: List of severities to include (default: Blocker, Severe)
-            year: Filter to this year only (default: 2025)
 
-        Returns DataFrame with single row of average working days by month.
+        Returns DataFrame with single row of average working days by year-month.
         """
-        hours_df = self.avg_working_hours_by_month_cross(severities=severities, year=year)
+        hours_df = self.avg_working_hours_by_month_cross(severities=severities)
         
         if hours_df.empty:
             return pd.DataFrame()

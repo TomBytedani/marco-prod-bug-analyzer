@@ -170,6 +170,18 @@ def compute_month(dt: Optional[datetime]) -> Optional[str]:
     return ENGLISH_MONTHS.get(dt.month)
 
 
+def compute_year_month(dt: Optional[datetime]) -> Optional[str]:
+    """Get year-month string in format 'MMM-YYYY' (e.g., 'JAN-2025').
+    
+    This format allows proper differentiation between the same month
+    across different years (e.g., JAN-2025 vs JAN-2026).
+    """
+    if not dt:
+        return None
+    month_abbr = ENGLISH_MONTHS.get(dt.month)
+    return f"{month_abbr}-{dt.year}" if month_abbr else None
+
+
 class DataTransformer:
     """Transforms Jira API responses into structured DataFrames."""
     
@@ -258,6 +270,7 @@ class DataTransformer:
             "Year": incident_datetime.year if incident_datetime else None,
             "Quarter": compute_quarter(incident_datetime),
             "Month": compute_month(incident_datetime),
+            "YearMonth": compute_year_month(incident_datetime),
             
             # Keep raw labels for filtering
             "_labels_list": labels,
