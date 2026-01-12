@@ -1,0 +1,17 @@
+{
+    "phases": [
+        "myGATE",
+        "website",
+        "Contract management",
+        "Accounting",
+        "Billing and invoicing",
+        "Vehicle delivery",
+        "Credit KYC",
+        "Onboarding",
+        "Quotation - SIS",
+        "Quotation - dealer"
+    ],
+    "label_to_phase": {
+        "note": "Maps labels or field values to journey phases - may need refinement based on actual data"
+    }
+}

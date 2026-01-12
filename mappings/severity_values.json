@@ -1,0 +1,11 @@
+{
+    "severity_order": [
+        "Blocker",
+        "Severe",
+        "Medium",
+        "Low"
+    ],
+    "severity_map": {
+        "note": "Maps severity field option IDs to display names - to be populated after API discovery"
+    }
+}

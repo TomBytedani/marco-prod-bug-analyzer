@@ -1,0 +1,102 @@
+{
+    "standard_fields": {
+        "key": "Key",
+        "summary": "Summary",
+        "status": "Status",
+        "labels": "Labels",
+        "resolutiondate": "Resolution date",
+        "issuelinks": "Linked Issues",
+        "issuetype": "Issue Type"
+    },
+    "custom_fields": {
+        "incident_detection_datetime": {
+            "id": "customfield_10497",
+            "name": "Incident detection datetime",
+            "report_column": "Incident detection datetime",
+            "type": "datetime"
+        },
+        "incident_detection_date": {
+            "id": "customfield_10479",
+            "name": "Incident detection date",
+            "report_column": "Incident detection date",
+            "type": "date"
+        },
+        "severity": {
+            "id": "customfield_11192",
+            "name": "Severity",
+            "report_column": "Severity",
+            "type": "option"
+        },
+        "severity_alt": {
+            "id": "customfield_10251",
+            "name": "Severity",
+            "report_column": "Severity",
+            "type": "option",
+            "note": "Alternative severity field - may be used depending on project"
+        },
+        "root_cause": {
+            "id": "customfield_10686",
+            "name": "Root cause",
+            "report_column": "Root Cause",
+            "type": "option"
+        },
+        "phase": {
+            "id": "customfield_10684",
+            "name": "E2E phase",
+            "report_column": "Phase",
+            "type": "option"
+        },
+        "systems_impacted": {
+            "id": "customfield_10532",
+            "name": "Systems impacted",
+            "report_column": "System",
+            "type": "option"
+        },
+        "resolution_date_custom": {
+            "id": "customfield_10495",
+            "name": "Resolution date",
+            "report_column": "Resolution date",
+            "type": "date",
+            "note": "Fallback resolution date field"
+        },
+        "resolution_datetime": {
+            "id": "customfield_10687",
+            "name": "Resolution datetime",
+            "report_column": "Resolution date",
+            "type": "datetime",
+            "note": "Primary resolution datetime field to use"
+        },
+        "external_system": {
+            "id": "customfield_10685",
+            "name": "Systems impacted (External)",
+            "report_column": "External System",
+            "type": "option",
+            "note": "Used to identify third-party systems for filtering. Values starting with 'Third Party' indicate external systems."
+        }
+    },
+    "computed_fields": {
+        "total_days": "Total Days",
+        "year": "Year",
+        "quarter": "Quarter",
+        "month": "Month"
+    },
+    "api_fields_to_request": [
+        "key",
+        "summary",
+        "status",
+        "labels",
+        "resolutiondate",
+        "issuelinks",
+        "issuetype",
+        "customfield_10497",
+        "customfield_10479",
+        "customfield_11192",
+        "customfield_10251",
+        "customfield_10686",
+        "customfield_10684",
+        "customfield_10532",
+        "customfield_10495",
+        "customfield_10687",
+        "customfield_10685"
+    ]
+}

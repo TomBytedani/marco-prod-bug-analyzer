@@ -1,0 +1,30 @@
+{
+    "system_priority": [
+        "AF",
+        "ECD",
+        "SAP",
+        "MyGate",
+        "auth0",
+        "CRM",
+        "website",
+        "documents"
+    ],
+    "special_rules": {
+        "GatePortal": "If GatePortal is present with another system, prefer the secondary system"
+    },
+    "label_to_system": {
+        "AF": "AF",
+        "ECD": "ECD",
+        "SAP": "SAP",
+        "MyGate": "MyGate",
+        "auth0": "auth0",
+        "CRM": "CRM",
+        "website": "website",
+        "documents": "documents",
+        "GatePortal": "GatePortal"
+    },
+    "third_party_systems": {
+        "Iveco": "Third party (Iveco)",
+        "Other": "Third party (Other)"
+    }
+}
