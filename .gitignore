@@ -1,0 +1,24 @@
+# Repo Files
+.env
+AGENTS.md
+@AGENTS.md
+build*
+BUILD*
+gui*
+
+# Other Files
+excel*
+pi*
+planning-docu*
+PI*
+verify*
+
+# Folders
+.beads/
+.claude/
+build/
+dist/
+mappings/discovered_fields.json
+output/
+templates/
+venv/
