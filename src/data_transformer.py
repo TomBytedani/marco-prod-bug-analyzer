@@ -182,6 +182,18 @@ def compute_year_month(dt: Optional[datetime]) -> Optional[str]:
     return f"{month_abbr}-{dt.year}" if month_abbr else None
 
 
+def compute_year_quarter(dt: Optional[datetime]) -> Optional[str]:
+    """Get year-quarter string in format 'Qn-YYYY' (e.g., 'Q1-2025').
+    
+    This format allows proper differentiation between the same quarter
+    across different years (e.g., Q1-2025 vs Q1-2026).
+    """
+    if not dt:
+        return None
+    quarter_num = (dt.month - 1) // 3 + 1
+    return f"Q{quarter_num}-{dt.year}"
+
+
 class DataTransformer:
     """Transforms Jira API responses into structured DataFrames."""
     
@@ -271,6 +283,7 @@ class DataTransformer:
             "Quarter": compute_quarter(incident_datetime),
             "Month": compute_month(incident_datetime),
             "YearMonth": compute_year_month(incident_datetime),
+            "YearQuarter": compute_year_quarter(incident_datetime),
             
             # Keep raw labels for filtering
             "_labels_list": labels,

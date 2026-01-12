@@ -94,6 +94,31 @@ def sort_year_month_columns(columns: list) -> list:
     
     return sorted(columns, key=parse_year_month)
 
+
+def sort_year_quarter_columns(columns: list) -> list:
+    """Sort columns in format 'Qn-YYYY' chronologically.
+    
+    Args:
+        columns: List of column names in 'Qn-YYYY' format (e.g., ['Q1-2026', 'Q4-2025'])
+        
+    Returns:
+        List sorted chronologically (earliest quarter first)
+    """
+    def parse_year_quarter(col: str) -> tuple:
+        if not isinstance(col, str) or '-' not in col:
+            return (9999, 99)  # Unknown format goes last
+        parts = col.split('-')
+        if len(parts) == 2 and parts[0].startswith('Q'):
+            try:
+                quarter_num = int(parts[0][1:])
+                year = int(parts[1])
+                return (year, quarter_num)
+            except ValueError:
+                return (9999, 99)
+        return (9999, 99)
+    
+    return sorted(columns, key=parse_year_quarter)
+
 def get_priority_system(systems_str: str) -> Optional[str]:
     """
     Get the highest priority system from a semicolon-separated string of systems.
@@ -540,7 +565,10 @@ class Aggregator:
         - Blocker/Severe severity only (default)
         - Excludes Rejected status
         
-        Returns DataFrame with severities as rows, quarters as columns.
+        Multi-year support: Columns are in 'Qn-YYYY' format (e.g., 'Q1-2025', 'Q2-2026'),
+        sorted chronologically.
+        
+        Returns DataFrame with severities as rows, year-quarters as columns.
         """
         if severities is None:
             severities = ["Blocker", "Severe"]
@@ -555,22 +583,21 @@ class Aggregator:
         data = self.exclude_rejected(data)
         data = self.filter_by_severities(data, severities)
         
-        if data.empty:
+        if data.empty or "YearQuarter" not in data.columns:
             return pd.DataFrame()
         
         pivot = pd.pivot_table(
             data,
             values="Key",
             index="Severity",
-            columns="Quarter",
+            columns="YearQuarter",
             aggfunc="count",
             fill_value=0,
             observed=False
         )
         
-        # Order columns Q1-Q4
-        quarter_order = ["Q1", "Q2", "Q3", "Q4"]
-        cols = [q for q in quarter_order if q in pivot.columns]
+        # Sort columns chronologically using year-quarter sorting
+        cols = sort_year_quarter_columns([c for c in pivot.columns])
         if cols:
             pivot = pivot[cols]
         
