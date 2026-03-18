@@ -2,6 +2,7 @@
 .env
 AGENTS.md
 @AGENTS.md
+CLAUDE.md
 build*
 BUILD*
 gui*

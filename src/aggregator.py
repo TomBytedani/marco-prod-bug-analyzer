@@ -190,23 +190,26 @@ def is_rejected(status: str) -> bool:
     return str(status).strip().lower() == "rejected"
 
 
-def is_task_type(issue_type: str) -> bool:
+VALID_INCIDENT_TYPES = {"[system] incident", "production incident"}
+
+
+def is_valid_incident_type(issue_type: str) -> bool:
     """
-    Check if an issue type indicates a Task (converted from incident).
-    
-    PI tickets that have been converted to Task type should be excluded
-    from aggregation tables. Only [System] Incident type issues should
-    be counted.
-    
+    Check if an issue type is a valid incident type for aggregation.
+
+    Only [System] Incident and Production Incident types should be
+    included in aggregation tables. All other types (e.g. "Ask a question")
+    are excluded.
+
     Args:
         issue_type: The issue type name from Jira
-        
+
     Returns:
-        True if the issue is a Task type (should be excluded)
+        True if the issue type should be included in aggregations
     """
     if not issue_type or pd.isna(issue_type):
         return False
-    return str(issue_type).strip().lower() == "task"
+    return str(issue_type).strip().lower() in VALID_INCIDENT_TYPES
 
 
 def get_end_of_month(year: int, month: int) -> date:
@@ -326,24 +329,23 @@ class Aggregator:
     
     def filter_incidents_only(self, df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
         """
-        Filter out issues that have been converted to Task type.
-        
-        PI tickets retrieved from the Jira filter may include tickets that have been
-        converted to Task type. These should be excluded from all aggregation tables.
-        Only [System] Incident type issues should be counted.
-        
+        Filter to only include valid incident types.
+
+        Only [System] Incident and Production Incident types are included.
+        All other types (e.g. "Ask a question") are excluded.
+
         Args:
             df: DataFrame to filter (default: self.df)
-            
+
         Returns:
-            DataFrame excluding Task type issues
+            DataFrame containing only valid incident types
         """
         data = df if df is not None else self.df
         if "_issue_type" not in data.columns:
             return data.copy()
         # Use vectorized string comparison for reliability
         issue_type_normalized = data["_issue_type"].fillna("").astype(str).str.strip().str.lower()
-        return data[issue_type_normalized != "task"].copy()
+        return data[issue_type_normalized.isin(VALID_INCIDENT_TYPES)].copy()
     
     def filter_by_severities(
         self, 
@@ -466,13 +468,14 @@ class Aggregator:
     def monthly_severity_counts(self) -> pd.DataFrame:
         """
         Generate monthly severity counts as a simple table.
+        Each ticket is counted in every month it was open (detection → resolution).
         Rows: Severity levels
         Columns: YearMonth in format 'MMM-YYYY' (e.g., 'JAN-2025', 'FEB-2026')
 
         BEAD 1 Filtering applied:
         - Excludes Rejected status
         - Excludes external systems (Third Party)
-        
+
         Multi-year support: Columns span all years present in the data,
         sorted chronologically.
         """
@@ -483,12 +486,45 @@ class Aggregator:
         data = self.filter_incidents_only()
         data = self.exclude_rejected(data)
         data = self.exclude_external_systems(data)
-        
+
         if data.empty:
             return pd.DataFrame()
-        
+
+        # Expand each ticket into one row per month it was open
+        expanded_rows = []
+        for _, row in data.iterrows():
+            start_dt = row.get("Incident detection datetime")
+            if pd.isna(start_dt):
+                continue
+
+            end_dt = row.get("Resolution date")
+            if pd.isna(end_dt):
+                end_dt = datetime.now()
+
+            months = get_months_between(start_dt, end_dt)
+            if not months:
+                # Fallback to original YearMonth column
+                months = [{"month_name": row["YearMonth"].split("-")[0],
+                           "year": int(row["YearMonth"].split("-")[1])}]
+
+            for m in months:
+                ym = f"{m['month_name']}-{m['year']}"
+                expanded_rows.append({
+                    "Key": row["Key"],
+                    "Severity": row["Severity"],
+                    "YearMonth": ym,
+                })
+
+        if not expanded_rows:
+            return pd.DataFrame()
+
+        expanded_df = pd.DataFrame(expanded_rows)
+        expanded_df["Severity"] = pd.Categorical(
+            expanded_df["Severity"], categories=SEVERITY_ORDER
+        )
+
         pivot = pd.pivot_table(
-            data,
+            expanded_df,
             values="Key",
             index="Severity",
             columns="YearMonth",
@@ -496,19 +532,19 @@ class Aggregator:
             fill_value=0,
             observed=False
         )
-        
+
         # Sort columns chronologically using year-month sorting
         cols = sort_year_month_columns([c for c in pivot.columns])
         if not cols:
             return pivot
-        
+
         pivot = pivot[cols]
-        
+
         # Reorder rows to severity order
         rows = [s for s in SEVERITY_ORDER if s in pivot.index]
         if rows:
             pivot = pivot.reindex(rows)
-        
+
         return pivot
     
     def phase_severity_counts(
@@ -516,64 +552,75 @@ class Aggregator:
         severities: list[str] = None
     ) -> pd.DataFrame:
         """
-        Count issues by phase (E2E journey phase) and severity.
-        
+        Count issues by phase (E2E journey phase) and quarter.
+
         BEAD 1 Filtering applied:
-        - Blocker/Severe severity only (default)
+        - Blocker/Severe severity only (default) - both included together
         - Excludes Rejected status
-        
+
+        Rows: E2E journey phases (myGATE, website, etc.)
+        Columns: YearQuarter in 'Qn-YYYY' format (e.g., 'Q1-2025', 'Q2-2026')
+
         Args:
             severities: List of severities to include (default: Blocker, Severe)
         """
         if severities is None:
             severities = ["Blocker", "Severe"]
-        
+
         # Apply filters: exclude Task-type issues, Rejected, filter to specified severities
         data = self.filter_incidents_only()
         data = self.exclude_rejected(data)
         data = self.filter_by_severities(data, severities)
-        
-        if data.empty or "Phase" not in data.columns:
+
+        if data.empty or "Phase" not in data.columns or "YearQuarter" not in data.columns:
             return pd.DataFrame()
-        
+
         pivot = pd.pivot_table(
             data,
             values="Key",
             index="Phase",
-            columns="Severity",
+            columns="YearQuarter",
             aggfunc="count",
             fill_value=0,
             observed=False
         )
-        
-        # Ensure columns are in severity order
-        cols = [s for s in severities if s in pivot.columns]
+
+        # Sort columns chronologically using year-quarter sorting
+        cols = sort_year_quarter_columns([c for c in pivot.columns])
         if cols:
             pivot = pivot[cols]
-        
+
         return pivot
     
     def quarterly_dealer_journey(
         self,
-        severities: list[str] = None
+        severities: list[str] = None,
+        system_filter: str = None
     ) -> pd.DataFrame:
         """
         Generate quarterly breakdown of Blocker & Severe issues on Dealer Journey.
-        
+
         BEAD 1 Filtering applied:
         - ONLY includes issues with DEALER_CRITICAL_PATH label
         - Blocker/Severe severity only (default)
         - Excludes Rejected status
-        
+
         Multi-year support: Columns are in 'Qn-YYYY' format (e.g., 'Q1-2025', 'Q2-2026'),
         sorted chronologically.
-        
+
+        Args:
+            severities: List of severities to include (default: Blocker, Severe)
+            system_filter: Optional system filter:
+                - "AF": Only include tickets where priority system is AF
+                - "non-AF": Only include tickets where priority system is NOT AF
+                - None: Include all systems (default)
+
         Returns DataFrame with severities as rows, year-quarters as columns.
         """
         if severities is None:
             severities = ["Blocker", "Severe"]
-        
-        # Apply filters: 
+
+        # Apply filters:
         # 1. Exclude Task-type issues
         # 2. Filter by DEALER_CRITICAL_PATH label
         # 3. Exclude Rejected
@@ -582,10 +629,23 @@ class Aggregator:
         data = self.filter_by_label_contains(data, "DEALER_CRITICAL_PATH")
         data = self.exclude_rejected(data)
         data = self.filter_by_severities(data, severities)
-        
+
         if data.empty or "YearQuarter" not in data.columns:
             return pd.DataFrame()
-        
+
+        # Apply system filter if specified
+        if system_filter and "External System" in data.columns:
+            data = data.copy()
+            data["_priority_system"] = data["External System"].apply(get_priority_system)
+
+            if system_filter == "AF":
+                data = data[data["_priority_system"] == "AF"]
+            elif system_filter == "non-AF":
+                data = data[data["_priority_system"] != "AF"]
+
+        if data.empty:
+            return pd.DataFrame()
+
         pivot = pd.pivot_table(
             data,
             values="Key",
@@ -595,17 +655,17 @@ class Aggregator:
             fill_value=0,
             observed=False
         )
-        
+
         # Sort columns chronologically using year-quarter sorting
         cols = sort_year_quarter_columns([c for c in pivot.columns])
         if cols:
             pivot = pivot[cols]
-        
+
         # Order rows by severity
         rows = [s for s in severities if s in pivot.index]
         if rows:
             pivot = pivot.reindex(rows)
-        
+
         return pivot
     
     def avg_resolution_by_month(self) -> pd.DataFrame:
@@ -628,43 +688,63 @@ class Aggregator:
     
     def root_cause_counts(self, severities: list[str] = None) -> pd.DataFrame:
         """
-        Count issues by root cause category.
-        
+        Count issues by root cause category and quarter.
+
         BEAD 1 Filtering applied:
         - Blocker/Severe severity only (default)
         - INCLUDES Rejected status (exception - Root Cause Analysis keeps Rejected)
-        
+
+        Rows: Root cause categories
+        Columns: YearQuarter in 'Qn-YYYY' format (e.g., 'Q1-2025', 'Q2-2026')
+
         Args:
             severities: List of severities to include (default: Blocker, Severe)
-        
-        Returns DataFrame with root causes and counts.
+
+        Returns DataFrame with root causes as rows, quarters as columns.
         """
         if severities is None:
             severities = ["Blocker", "Severe"]
-        
+
         # Apply filters: Exclude Task-type, Blocker/Severe only
         # NOTE: Root Cause Analysis is the EXCEPTION - we KEEP Rejected issues
         data = self.filter_incidents_only()
         data = self.filter_by_severities(data, severities)
-        
-        if "Root Cause" not in data.columns:
-            return pd.DataFrame({"Root Cause": ROOT_CAUSES, "Count": [0] * len(ROOT_CAUSES)})
-        
-        counts = data["Root Cause"].value_counts()
-        
-        # Build result with all categories
-        result = []
-        for rc in ROOT_CAUSES:
-            result.append({
-                "Root Cause": rc,
-                "Count": counts.get(rc, 0)
-            })
-        
-        return pd.DataFrame(result)
+
+        if "Root Cause" not in data.columns or "YearQuarter" not in data.columns:
+            return pd.DataFrame()
+
+        if data.empty:
+            return pd.DataFrame()
+
+        pivot = pd.pivot_table(
+            data,
+            values="Key",
+            index="Root Cause",
+            columns="YearQuarter",
+            aggfunc="count",
+            fill_value=0,
+            observed=False
+        )
+
+        # Sort columns chronologically using year-quarter sorting
+        cols = sort_year_quarter_columns([c for c in pivot.columns])
+        if cols:
+            pivot = pivot[cols]
+
+        # Reorder rows to standard root cause order
+        rows = [rc for rc in ROOT_CAUSES if rc in pivot.index]
+        if rows:
+            pivot = pivot.reindex(rows)
+
+        # Clear index/columns names to prevent extra row in Excel output
+        pivot.index.name = None
+        pivot.columns.name = None
+
+        return pivot
     
     def system_counts(self, severities: list[str] = None) -> pd.DataFrame:
         """
-        Count issues by system/application.
+        Count issues by system/application and quarter.
 
         Uses the External System field (customfield_10685) as data source.
         When a ticket has multiple systems, only counts once using priority order.
@@ -674,10 +754,13 @@ class Aggregator:
         - Blocker/Severe severity only (default)
         - Excludes Rejected status
 
+        Rows: System/Application names
+        Columns: YearQuarter in 'Qn-YYYY' format (e.g., 'Q1-2025', 'Q2-2026')
+
         Args:
             severities: List of severities to include (default: Blocker, Severe)
 
-        Returns DataFrame with systems and counts.
+        Returns DataFrame with systems as rows, quarters as columns.
         """
         if severities is None:
             severities = ["Blocker", "Severe"]
@@ -687,24 +770,41 @@ class Aggregator:
         data = self.exclude_rejected(data)
         data = self.filter_by_severities(data, severities)
 
-        if "External System" not in data.columns:
-            return pd.DataFrame({"System": SYSTEMS, "Count": [0] * len(SYSTEMS)})
+        if "External System" not in data.columns or "YearQuarter" not in data.columns:
+            return pd.DataFrame()
+
+        if data.empty:
+            return pd.DataFrame()
 
         # Apply priority logic: for each ticket, select highest priority system
-        priority_systems = data["External System"].apply(get_priority_system)
+        data = data.copy()
+        data["_priority_system"] = data["External System"].apply(get_priority_system)
 
-        # Count occurrences of each system
-        counts = priority_systems.value_counts()
+        pivot = pd.pivot_table(
+            data,
+            values="Key",
+            index="_priority_system",
+            columns="YearQuarter",
+            aggfunc="count",
+            fill_value=0,
+            observed=False
+        )
 
-        # Build result with all categories
-        result = []
-        for sys in SYSTEMS:
-            result.append({
-                "System": sys,
-                "Count": counts.get(sys, 0)
-            })
+        # Sort columns chronologically using year-quarter sorting
+        cols = sort_year_quarter_columns([c for c in pivot.columns])
+        if cols:
+            pivot = pivot[cols]
 
-        return pd.DataFrame(result)
+        # Reorder rows to standard system order
+        rows = [sys for sys in SYSTEMS if sys in pivot.index]
+        if rows:
+            pivot = pivot.reindex(rows)
+
+        # Clear index/columns names to prevent extra row in Excel output
+        pivot.index.name = None
+        pivot.columns.name = None
+
+        return pivot
     
     def generate_pivot_table_a(self, label_filter: str = "AF") -> pd.DataFrame:
         """
@@ -854,8 +954,113 @@ class Aggregator:
         # Convert hours to days (8 hours per day)
         days_df = hours_df.apply(working_hours_to_days)
         days_df.index = ["Avg WD"]
-        
+
         return days_df
+
+    def monthly_blocker_closures(self) -> pd.DataFrame:
+        """
+        Count Blocker tickets closed by month and their average working hours.
+
+        Groups by RESOLUTION month (not incident month).
+
+        Filtering applied:
+        - Severity = Blocker only
+        - Status = Closed, Workaround Applied, or Resolved
+        - Excludes System = AF
+        - Excludes Root Cause = "Non-standard process"
+        - Excludes Task-type issues
+
+        Returns DataFrame with two rows:
+        - "Count": Number of Blockers closed in that month
+        - "Avg WH": Average working hours for those Blockers
+
+        Columns are in format 'MMM-YYYY' (e.g., 'JAN-2025', 'FEB-2026').
+        """
+        # Apply filters:
+        # 1. Exclude Task-type issues
+        data = self.filter_incidents_only()
+
+        # 2. Filter to Blocker severity only
+        data = self.filter_by_severities(data, ["Blocker"])
+
+        # 3. Filter to resolved/closed statuses
+        resolved_statuses = ["Closed", "Workaround Applied", "Resolved"]
+        data = data[data["Status"].isin(resolved_statuses)].copy()
+
+        if data.empty:
+            return pd.DataFrame()
+
+        # 4. Exclude AF system (using priority system logic)
+        if "External System" in data.columns:
+            data["_priority_system"] = data["External System"].apply(get_priority_system)
+            data = data[data["_priority_system"] != "AF"]
+
+        # 5. Exclude "Non-standard process" root cause
+        if "Root Cause" in data.columns:
+            data = data[data["Root Cause"] != "Non-standard process"]
+
+        if data.empty:
+            return pd.DataFrame()
+
+        # Group by resolution month (not incident month)
+        monthly_count: Dict[str, int] = {}
+        monthly_hours: Dict[str, List[float]] = {}
+
+        for _, ticket in data.iterrows():
+            incident_dt = ticket.get("Incident detection datetime")
+            resolution_dt = ticket.get("Resolution date")
+
+            if pd.isna(resolution_dt):
+                continue
+
+            # Ensure datetime types
+            if not isinstance(resolution_dt, datetime):
+                if isinstance(resolution_dt, date):
+                    resolution_dt = datetime.combine(resolution_dt, datetime.min.time().replace(hour=18))
+                else:
+                    continue
+
+            # Get resolution month in MMM-YYYY format
+            resolution_month = resolution_dt.month
+            resolution_year = resolution_dt.year
+            month_name = MONTH_ORDER[resolution_month - 1]
+            year_month_key = f"{month_name}-{resolution_year}"
+
+            # Count the ticket
+            monthly_count[year_month_key] = monthly_count.get(year_month_key, 0) + 1
+
+            # Calculate working hours if we have incident datetime
+            if not pd.isna(incident_dt) and isinstance(incident_dt, datetime):
+                hours = calculate_working_hours(incident_dt, resolution_dt)
+                if hours > 0:
+                    if year_month_key not in monthly_hours:
+                        monthly_hours[year_month_key] = []
+                    monthly_hours[year_month_key].append(hours)
+
+        if not monthly_count:
+            return pd.DataFrame()
+
+        # Build result with all months that have data
+        all_months = sorted(set(monthly_count.keys()) | set(monthly_hours.keys()),
+                           key=lambda x: (int(x.split('-')[1]), MONTH_TO_NUM.get(x.split('-')[0], 0)))
+
+        count_row = {}
+        avg_wh_row = {}
+
+        for month_key in all_months:
+            count_row[month_key] = monthly_count.get(month_key, 0)
+            hours_list = monthly_hours.get(month_key, [])
+            if hours_list:
+                avg_wh_row[month_key] = sum(hours_list) / len(hours_list)
+            else:
+                avg_wh_row[month_key] = 0
+
+        # Create DataFrame
+        df_result = pd.DataFrame([count_row, avg_wh_row], index=["Count", "Avg WH"])
+
+        # Sort columns chronologically
+        cols = sort_year_month_columns([c for c in df_result.columns])
+        return df_result[cols]
 
 
 def test_aggregations():

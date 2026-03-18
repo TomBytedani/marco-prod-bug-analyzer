@@ -228,6 +228,10 @@ class DataTransformer:
         issuetype_obj = fields.get("issuetype", {})
         issuetype = issuetype_obj.get("name", "") if issuetype_obj else ""
         
+        # Ticket creation date (standard Jira field)
+        created_raw = fields.get("created")
+        created_date = parse_datetime(created_raw)
+        
         # Custom fields
         incident_datetime_raw = self._get_custom_field_value(fields, "incident_detection_datetime")
         incident_date_raw = self._get_custom_field_value(fields, "incident_detection_date")
@@ -249,8 +253,8 @@ class DataTransformer:
         
         # Parse dates
         incident_datetime = parse_datetime(incident_datetime_raw)
-        if not incident_datetime and incident_date_raw:
-            incident_datetime = parse_date(incident_date_raw)
+        if not incident_datetime:
+            incident_datetime = created_date
         
         # Try parsing as datetime first, then as date
         resolution_date = parse_datetime(resolution_date_raw) or parse_date(resolution_date_raw)
@@ -269,6 +273,7 @@ class DataTransformer:
             "Severity": severity,
             "Status": status,
             "Labels": extract_labels(labels),
+            "Created date": created_date,
             "Incident detection datetime": incident_datetime,
             "Linked Issues": extract_linked_issues(fields.get("issuelinks", [])),
             "Resolution date": resolution_date,
@@ -319,6 +324,10 @@ class DataTransformer:
             df["Resolution date"] = pd.to_datetime(
                 df["Resolution date"], utc=True
             ).dt.tz_localize(None)
+        if "Created date" in df.columns:
+            df["Created date"] = pd.to_datetime(
+                df["Created date"], utc=True
+            ).dt.tz_localize(None)
         if "Total Days" in df.columns:
             df["Total Days"] = pd.to_numeric(df["Total Days"], errors="coerce").astype("Int64")
         if "Year" in df.columns:
@@ -335,6 +344,7 @@ class DataTransformer:
             "Severity",
             "Status",
             "Labels",
+            "Created date",
             "Incident detection datetime",
             "Linked Issues",
             "Resolution date",

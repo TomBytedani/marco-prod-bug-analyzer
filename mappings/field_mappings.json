@@ -6,7 +6,8 @@
         "labels": "Labels",
         "resolutiondate": "Resolution date",
         "issuelinks": "Linked Issues",
-        "issuetype": "Issue Type"
+        "issuetype": "Issue Type",
+        "created": "Created date"
     },
     "custom_fields": {
         "incident_detection_datetime": {
@@ -97,6 +98,7 @@
         "customfield_10532",
         "customfield_10495",
         "customfield_10687",
-        "customfield_10685"
+        "customfield_10685",
+        "created"
     ]
 }
