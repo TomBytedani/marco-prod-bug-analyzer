@@ -54,7 +54,7 @@ class CredentialsManager:
         data = {
             'email': self._encode(email),
             'api_token': self._encode(api_token),
-            'jira_domain': jira_domain or 'https://stellantis.atlassian.net'  # Fixed domain
+            'jira_domain': jira_domain or 'https://asd.atlassian.net'  # Fixed domain
         }
         
         with open(self.config_file, 'w', encoding='utf-8') as f:
@@ -71,7 +71,7 @@ class CredentialsManager:
         return {
             'email': self._decode(data.get('email', '')),
             'api_token': self._decode(data.get('api_token', '')),
-            'jira_domain': data.get('jira_domain', 'https://stellantis.atlassian.net')
+            'jira_domain': data.get('jira_domain', 'https://asd.atlassian.net')
         }
     
     def clear_credentials(self) -> None:
