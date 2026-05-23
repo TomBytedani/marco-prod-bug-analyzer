@@ -1,30 +1,30 @@
 {
     "system_priority": [
-        "AF",
-        "ECD",
-        "SAP",
-        "MyGate",
+        "AssetManagementSystem",
+        "CreditSystem1",
+        "SystemN",
+        "System1",
         "auth0",
         "CRM",
         "website",
         "documents"
     ],
     "special_rules": {
-        "GatePortal": "If GatePortal is present with another system, prefer the secondary system"
+        "NamePortal": "If NamePortal is present with another system, prefer the secondary system"
     },
     "label_to_system": {
-        "AF": "AF",
-        "ECD": "ECD",
+        "AMS": "AssetManagementSystem",
+        "ECD": "EuropeanCreditDistro",
         "SAP": "SAP",
-        "MyGate": "MyGate",
+        "Sys1": "System1",
         "auth0": "auth0",
         "CRM": "CRM",
         "website": "website",
         "documents": "documents",
-        "GatePortal": "GatePortal"
+        "NP": "NamePortal"
     },
     "third_party_systems": {
-        "Iveco": "Third party (Iveco)",
+        "Company": "Third party (Company)",
         "Other": "Third party (Other)"
     }
 }
