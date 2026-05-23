@@ -1,6 +1,6 @@
 {
     "phases": [
-        "myGATE",
+        "phase1",
         "website",
         "Contract management",
         "Accounting",
@@ -8,7 +8,7 @@
         "Vehicle delivery",
         "Credit KYC",
         "Onboarding",
-        "Quotation - SIS",
+        "Quotation - Sales Support",
         "Quotation - dealer"
     ],
     "label_to_phase": {
