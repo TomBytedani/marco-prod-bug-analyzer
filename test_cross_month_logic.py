@@ -470,7 +470,7 @@ def test_aggregator_cross_month():
         'Severity': ['Blocker', 'Severe', 'Blocker'],
         'Status': ['Closed', 'Closed', 'Resolved'],
         '_issue_type': ['[System] Incident', 'Production Incident', '[System] Incident'],
-        'External System': ['AF', 'Gate Portal', 'ECD'],
+        'External System': ['AMS', 'name Portal', 'ECD'],
         'Incident detection datetime': [
             datetime(2025, 10, 15, 10, 0),  # Oct 15
             datetime(2025, 11, 1, 9, 0),    # Nov 1
@@ -591,7 +591,7 @@ def test_incident_type_filtering():
             'Ask a question',
             'Task',
         ],
-        'External System': ['AF', 'AF', 'AF', 'AF'],
+        'External System': ['AMS', 'AMS', 'AMS', 'AMS'],
         'YearMonth': ['JAN-2025', 'JAN-2025', 'JAN-2025', 'JAN-2025'],
         'Year': [2025, 2025, 2025, 2025],
         'Quarter': [1, 1, 1, 1],
@@ -633,7 +633,7 @@ def test_monthly_severity_expansion():
             '[System] Incident',
             'Production Incident',
         ],
-        'External System': ['AF', 'Gate Portal', 'ECD', 'AF'],
+        'External System': ['AMS', 'name Portal', 'ECD', 'AMS'],
         'Incident detection datetime': [
             datetime(2025, 10, 15, 10, 0),
             datetime(2025, 11, 5, 9, 0),
