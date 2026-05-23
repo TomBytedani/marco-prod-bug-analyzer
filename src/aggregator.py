@@ -17,7 +17,7 @@ SEVERITY_ORDER = ["Blocker", "Severe", "Medium", "Low"]
 
 # Define phases for journey analysis
 JOURNEY_PHASES = [
-    "myGATE",
+    "System1",
     "website", 
     "Contract management",
     "Accounting",
@@ -25,7 +25,7 @@ JOURNEY_PHASES = [
     "Vehicle delivery",
     "Credit KYC",
     "Onboarding",
-    "Quotation - SIS",
+    "Quotation - Sales Support",
     "Quotation - dealer"
 ]
 
@@ -44,13 +44,13 @@ ROOT_CAUSES = [
 # System/Application categories (order defines priority - first = highest priority)
 # NOTE: These values must match EXACTLY what comes from Jira customfield_10685
 SYSTEMS = [
-    "Gate Portal",
-    "AF",
+    "Name Portal",
+    "AMS",
     "ECD",
     "SAP",
-    "myGATE",
+    "System1",
     "auth0",
-    "Third party (Iveco)",
+    "Third party (Company)",
     "Third party (Other)",
     "CRM",
     "Website",
@@ -124,10 +124,10 @@ def get_priority_system(systems_str: str) -> Optional[str]:
     Get the highest priority system from a semicolon-separated string of systems.
 
     Priority is determined by the order in SYSTEMS list (first = highest priority).
-    If a ticket has multiple systems (e.g., "AF; ECD"), returns the one with highest priority.
+    If a ticket has multiple systems (e.g., "AMS; ECD"), returns the one with highest priority.
 
     Args:
-        systems_str: Semicolon-separated string of system names (from customfield_10685)
+        systems_str: Semicolon-separated string of system names (from customfield_10333)
 
     Returns:
         The highest priority system name, or None if no valid system found
@@ -310,9 +310,9 @@ class Aggregator:
         """
         Filter out issues from external/third-party systems.
 
-        Uses the External System field (customfield_10685).
+        Uses the External System field (customfield_10333).
         Excludes issues where the value starts with 'Third Party'.
-        SAP, auth0, ECD are internal systems and are NOT excluded.
+        SAP, auth0, asd are internal systems and are NOT excluded.
 
         Args:
             df: DataFrame to filter (default: self.df)
@@ -558,7 +558,7 @@ class Aggregator:
         - Blocker/Severe severity only (default) - both included together
         - Excludes Rejected status
 
-        Rows: E2E journey phases (myGATE, website, etc.)
+        Rows: E2E journey phases (System1, website, etc.)
         Columns: YearQuarter in 'Qn-YYYY' format (e.g., 'Q1-2025', 'Q2-2026')
 
         Args:
@@ -601,7 +601,7 @@ class Aggregator:
         Generate quarterly breakdown of Blocker & Severe issues on Dealer Journey.
 
         BEAD 1 Filtering applied:
-        - ONLY includes issues with DEALER_CRITICAL_PATH label
+        - ONLY includes issues with CRITICAL_PATH label
         - Blocker/Severe severity only (default)
         - Excludes Rejected status
 
@@ -626,7 +626,7 @@ class Aggregator:
         # 3. Exclude Rejected
         # 4. Filter to specified severities
         data = self.filter_incidents_only()
-        data = self.filter_by_label_contains(data, "DEALER_CRITICAL_PATH")
+        data = self.filter_by_label_contains(data, "CRITICAL_PATH")
         data = self.exclude_rejected(data)
         data = self.filter_by_severities(data, severities)
 
@@ -638,10 +638,10 @@ class Aggregator:
             data = data.copy()
             data["_priority_system"] = data["External System"].apply(get_priority_system)
 
-            if system_filter == "AF":
-                data = data[data["_priority_system"] == "AF"]
+            if system_filter == "AMS":
+                data = data[data["_priority_system"] == "AMS"]
             elif system_filter == "non-AF":
-                data = data[data["_priority_system"] != "AF"]
+                data = data[data["_priority_system"] != "AMS"]
 
         if data.empty:
             return pd.DataFrame()
@@ -746,9 +746,9 @@ class Aggregator:
         """
         Count issues by system/application and quarter.
 
-        Uses the External System field (customfield_10685) as data source.
+        Uses the External System field (customfield_10333) as data source.
         When a ticket has multiple systems, only counts once using priority order.
-        Priority follows SYSTEMS list order (GatePortal > AF > ECD > ... > documents).
+        Priority follows SYSTEMS list order (NamePortal > AMS > ECD > ... > documents).
 
         BEAD 1 Filtering applied:
         - Blocker/Severe severity only (default)
@@ -966,7 +966,7 @@ class Aggregator:
         Filtering applied:
         - Severity = Blocker only
         - Status = Closed, Workaround Applied, or Resolved
-        - Excludes System = AF
+        - Excludes System = AMS
         - Excludes Root Cause = "Non-standard process"
         - Excludes Task-type issues
 
@@ -993,7 +993,7 @@ class Aggregator:
         # 4. Exclude AF system (using priority system logic)
         if "External System" in data.columns:
             data["_priority_system"] = data["External System"].apply(get_priority_system)
-            data = data[data["_priority_system"] != "AF"]
+            data = data[data["_priority_system"] != "AMS"]
 
         # 5. Exclude "Non-standard process" root cause
         if "Root Cause" in data.columns:
