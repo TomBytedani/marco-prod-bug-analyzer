@@ -18,7 +18,7 @@ ENGLISH_MONTHS = {
 }
 
 # System priority for resolving multiple systems
-SYSTEM_PRIORITY = ['AF', 'ECD', 'SAP', 'MyGate', 'auth0', 'CRM', 'website', 'documents']
+SYSTEM_PRIORITY = ['AMS', 'ECD', 'SAP', 'System1', 'auth0', 'CRM', 'website', 'documents']
 
 
 def load_field_mappings() -> dict:
@@ -102,7 +102,7 @@ def parse_date(value: Optional[str]) -> Optional[datetime]:
 def get_primary_system(labels: list[str]) -> str:
     """
     Determine the primary system from labels using priority rules.
-    If GatePortal is present with another system, prefer the secondary system.
+    If NamePortal is present with another system, prefer the secondary system.
     """
     if not labels:
         return "Other"
@@ -112,15 +112,15 @@ def get_primary_system(labels: list[str]) -> str:
     for label in labels:
         if label in SYSTEM_PRIORITY:
             found_systems.append(label)
-        elif label == "GatePortal":
+        elif label == "NamePortal":
             found_systems.append(label)
     
     if not found_systems:
         return "Other"
     
     # If GatePortal is present with another system, remove it
-    if "GatePortal" in found_systems and len(found_systems) > 1:
-        found_systems.remove("GatePortal")
+    if "NamePortal" in found_systems and len(found_systems) > 1:
+        found_systems.remove("NamePortal")
     
     # Return highest priority system
     for system in SYSTEM_PRIORITY:
@@ -128,8 +128,8 @@ def get_primary_system(labels: list[str]) -> str:
             return system
     
     # If only GatePortal remains
-    if "GatePortal" in found_systems:
-        return "GatePortal"
+    if "NamePortal" in found_systems:
+        return "NamePortal"
     
     return "Other"
 
